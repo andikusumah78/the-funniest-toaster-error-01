@@ -1,66 +1,53 @@
 #!/usr/bin/env python3
-"""The Funniest Toaster Error Message - make.fun entry.
+"""Toaster error entry for make.fun.
 
-Writes a single funny error message to /output/entry.txt.
-
-The gate requires UTF-8 text of 1 to 120 characters, not only
-whitespace. The line is fixed, so every run writes byte-identical
-output: no randomness, no clock, no network, pure stdlib.
-
-Helpers: resolve_out_dir() reads MAKEFUN_OUTPUT_DIR (default
-"/output") to pick the output directory; write_entry() writes the
-line to entry.txt in that directory and verifies it by reading
-it back.
+Saves one fixed error line to the file the grader reads.
+No input, no network, no clock, no randomness: the same bytes
+come out on every run, so the result is reproducible.
 """
 
 import os
 import sys
 
-# Fixed line (not generated): determinism - every run writes byte-identical output.
-LINE = "TOAST CANCELLED: THE BREAD HAS REVIEWED ITS OPTIONS AND CHOSEN TO REMAIN BREAD."
-
-GATE_MAX_CHARS = 120
+MESSAGE = "TOAST CANCELLED: THE BREAD HAS REVIEWED ITS OPTIONS AND CHOSEN TO REMAIN BREAD."
+LIMIT = 120
 
 
-def validate_line(line):
-    """Check the line against the gate: 1-120 chars, not blank."""
-    if not isinstance(line, str):
-        raise TypeError("line must be str")
-    if not line.strip():
-        raise ValueError("line must not be only whitespace")
-    if len(line) > GATE_MAX_CHARS:
-        raise ValueError("line is %d chars, over the 120 limit" % len(line))
-    if "\n" in line or "\r" in line:
-        raise ValueError("line must be a single line: no embedded newlines")
-    line.encode("utf-8")
-    return line
+def check(message):
+    """Refuse anything the gate would refuse: blank, too long, or multi-line."""
+    if not message or not message.strip():
+        raise ValueError("empty message")
+    if len(message) > LIMIT:
+        raise ValueError("message is %d chars, limit is %d" % (len(message), LIMIT))
+    if "\n" in message or "\r" in message:
+        raise ValueError("message must fit on one line")
+    message.encode("utf-8")
 
 
-def resolve_out_dir():
-    """Return the output directory: MAKEFUN_OUTPUT_DIR, or "/output"."""
-    return os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+def destination():
+    """Where entry.txt goes: MAKEFUN_OUTPUT_DIR, or /output when unset."""
+    return os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
 
 
-def write_entry(line, out_dir):
-    """Write line to entry.txt in out_dir and verify by reading it back."""
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(line)
-    # Read back and verify: the file on disk must be exactly the line
-    # we validated, otherwise the run is not reproducible.
-    with open(path, "r", encoding="utf-8") as f:
-        written = f.read()
-    if written != line:
-        raise ValueError("read-back mismatch: entry.txt does not match the validated line")
-    return path
+def save(message):
+    """Write the message to entry.txt, then read it back to prove it stuck."""
+    folder = destination()
+    os.makedirs(folder, exist_ok=True)
+    target = os.path.join(folder, "entry.txt")
+    with open(target, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(message)
+    with open(target, "r", encoding="utf-8") as handle:
+        if handle.read() != message:
+            raise ValueError("entry.txt differs from the message")
+    if os.path.getsize(target) != len(message.encode("utf-8")):
+        raise ValueError("entry.txt size differs from the message")
+    return target
 
 
 def main():
-    line = validate_line(LINE)
-    out_dir = resolve_out_dir()
-    path = write_entry(line, out_dir)
-    print("wrote %d chars to %s" % (len(line), path))
+    check(MESSAGE)
+    target = save(MESSAGE)
+    print("wrote %d chars to %s" % (len(MESSAGE), target))
     return 0
 
 
